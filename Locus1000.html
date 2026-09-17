@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locus — puzzle mode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#16241d;
+    --board-bg:#1d3025;
+    --square-alt: rgba(238,241,234,0.055);
+    --grid-line: rgba(238,241,234,0.14);
+    --ink:#eef1ea;
+    --muted:#93a89a;
+    --gold:#e8b34a;
+    --blue:#57b7d6;
+    --move-highlight: rgba(238,241,234,0.22);
+    --capture-highlight: rgba(226,104,74,0.4);
+    --hint-highlight: rgba(232,179,74,0.9);
+    --panel-border: rgba(238,241,234,0.2);
+    --panel-bg: rgba(238,241,234,0.03);
+    --err:#e2684a;
+    --font-hand:'Caveat', cursive;
+    --font-body:'Inter', system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#eee7d7; --board-bg:#f5f0e3; --square-alt: rgba(30,28,20,0.05);
+      --grid-line: rgba(30,28,20,0.18); --ink:#2a2822; --muted:#6d6a5a;
+      --gold:#9a6a12; --blue:#1c7a90; --move-highlight: rgba(30,28,20,0.14);
+      --capture-highlight: rgba(196,84,58,0.28); --hint-highlight:#9a6a12;
+      --panel-border: rgba(30,28,20,0.22); --panel-bg: rgba(30,28,20,0.035); --err:#b8452e;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#eee7d7; --board-bg:#f5f0e3; --square-alt: rgba(30,28,20,0.05);
+    --grid-line: rgba(30,28,20,0.18); --ink:#2a2822; --muted:#6d6a5a;
+    --gold:#9a6a12; --blue:#1c7a90; --move-highlight: rgba(30,28,20,0.14);
+    --capture-highlight: rgba(196,84,58,0.28); --hint-highlight:#9a6a12;
+    --panel-border: rgba(30,28,20,0.22); --panel-bg: rgba(30,28,20,0.035); --err:#b8452e;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(ellipse 900px 500px at 50% -10%, rgba(238,241,234,0.06), transparent 60%), var(--bg);
+    color:var(--ink); font-family:var(--font-body); min-height:100vh;
+  }
+  .wrap{max-width:1200px;margin:0 auto;padding:40px 24px 60px;}
+  header h1{
+    font-family:var(--font-hand); font-weight:700; font-size:clamp(28px,5vw,44px);
+    margin:0 0 8px; line-height:1.1;
+  }
+  header .subtitle{max-width:660px;color:var(--muted);line-height:1.6;font-size:14px;margin:0 0 6px;}
+  .rule-note{font-size:12px;color:var(--muted);margin:0 0 28px;}
+  .rule-note b{color:var(--ink);}
+  .layout{display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap;}
+  .board-col{flex:1 1 640px;min-width:320px;}
+  .panel{
+    flex:0 1 270px;min-width:240px;max-width:280px;
+    background:var(--panel-bg);border:1px solid var(--panel-border);
+    border-radius:6px;padding:18px 18px 16px;position:sticky;top:20px;
+  }
+
+  .status-box{
+    font-family:var(--font-hand);font-size:21px;color:var(--gold);
+    text-align:center;border:2px dashed var(--panel-border);border-radius:6px;
+    padding:10px;margin-bottom:14px;min-height:1.3em;
+  }
+  .status-box.win{color:var(--gold);border-color:var(--gold);}
+  .status-box.err{color:var(--err);border-color:var(--err);}
+
+  .diff-row{display:flex;gap:8px;margin-bottom:6px;}
+  .diff-btn{
+    flex:1;font-family:var(--font-body);font-size:12px;color:var(--muted);
+    background:transparent;border:1px solid var(--panel-border);border-radius:4px;
+    padding:8px 6px;cursor:pointer;text-align:center;
+  }
+  .diff-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(232,179,74,0.12);}
+  .diff-btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  .diff-desc{font-size:11px;color:var(--muted);line-height:1.5;margin:0 0 14px;min-height:2.4em;}
+
+  .score-row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-bottom:14px;padding:0 2px;flex-wrap:wrap;gap:4px;}
+  .score-row b{color:var(--ink);}
+
+  .btn-row{display:flex;gap:8px;margin-bottom:8px;}
+  .chalk-btn{
+    flex:1;font-family:var(--font-body);font-size:12.5px;color:var(--ink);
+    background:transparent;border:1px solid var(--panel-border);border-radius:4px;
+    padding:8px 10px;cursor:pointer;transition:border-color .15s,color .15s;
+  }
+  .chalk-btn:hover{border-color:var(--gold);color:var(--gold);}
+  .chalk-btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  .chalk-btn.primary{border-color:var(--gold);color:var(--gold);}
+  .chalk-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(232,179,74,0.12);}
+  .btn-row:last-of-type{margin-bottom:18px;}
+
+  #customPanel{margin-bottom:6px;}
+  .eq-row{display:flex;flex-direction:column;gap:4px;margin-bottom:2px;}
+  .eq-row label{font-size:11.5px;color:var(--muted);line-height:1.4;}
+  .eq-row input{
+    font-family:var(--font-body);font-size:13px;color:var(--ink);
+    background:rgba(238,241,234,0.04);border:1px solid var(--panel-border);
+    border-radius:4px;padding:7px 9px;width:100%;
+  }
+  .eq-row input:focus-visible{outline:2px solid var(--gold);outline-offset:1px;}
+  .eq-row input.bad{border-color:var(--err);}
+  .eq-err{font-size:11px;color:var(--err);min-height:14px;}
+
+  .legend-title{font-size:12.5px;color:var(--muted);margin:4px 0 10px;border-top:1px solid var(--panel-border);padding-top:14px;}
+  .legend-list{display:flex;flex-direction:column;gap:9px;}
+  .legend-row{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--muted);}
+  .legend-row .ic{flex:none;width:26px;height:26px;margin-top:1px;}
+  .legend-row .ltext{display:flex;flex-direction:column;}
+  .legend-row .lname{color:var(--ink);font-weight:500;}
+  .legend-row .leq{font-family:var(--font-body);opacity:.85;font-size:11.5px;}
+
+  .board-frame{display:flex;gap:6px;align-items:stretch;}
+  .ranks{display:flex;flex-direction:column;justify-content:space-around;width:22px;flex:none;}
+  .ranks span{font-size:12px;color:var(--muted);text-align:center;}
+  svg#board{flex:1;width:100%;height:auto;display:block;background:var(--board-bg);border:1px solid var(--panel-border);border-radius:4px;}
+  .files-row{display:flex;gap:6px;margin-top:6px;}
+  .files-spacer{width:22px;flex:none;}
+  .files{flex:1;display:flex;justify-content:space-around;}
+  .files span{font-size:12px;color:var(--muted);}
+
+  .cell{transition:fill .15s ease;}
+  .cell.movable{cursor:pointer;}
+  .piece{cursor:pointer;}
+  .piece.hint circle.bg{stroke:var(--hint-highlight) !important; stroke-width:3.4 !important;}
+
+  @media (max-width:720px){ .layout{flex-direction:column;} .panel{position:static;max-width:none;} }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Locus — puzzle mode</h1>
+    <p class="subtitle">Same idea as the original duel, scaled up to a 20×20 board: every piece's legal moves come from its own equation. The Core moves like a king and must be captured — and unlike a static target, it actively flees one step away from your pieces every time you miss, so the board keeps shifting under you. Shields shuffle too. Your job each round is to spot the one piece whose equation actually reaches it — right now.</p>
+    <p class="rule-note">Every puzzle rolls fresh <b>weights</b> into each piece's equation (a different radius, a different constant), so the same shape never solves the same way twice — read the numbers, don't rely on memory. You get a limited number of moves to find the capture, and <b>one minute per move</b> — a wrong move or a stalled clock both cost you a move.</p>
+  </header>
+
+  <div class="layout">
+    <div class="board-col">
+      <div class="board-frame">
+        <div class="ranks" id="ranksCol"></div>
+        <svg id="board" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="files-row">
+        <div class="files-spacer"></div>
+        <div class="files" id="filesRow"></div>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="status-box" id="statusBox">Find the move that captures the Core.</div>
+
+      <div class="diff-row">
+        <button class="diff-btn active" id="diffEasy">Easy</button>
+        <button class="diff-btn" id="diffMedium">Medium</button>
+        <button class="diff-btn" id="diffHard">Hard</button>
+      </div>
+      <p class="diff-desc" id="diffDesc"></p>
+
+      <div class="score-row">
+        <span>Solved: <b id="solvedCount">0</b></span>
+        <span>Streak: <b id="streakCount">0</b></span>
+      </div>
+      <div class="score-row">
+        <span>Moves left: <b id="movesLeft">0</b></span>
+        <span>Time left: <b id="timeLeft">60s</b></span>
+      </div>
+
+      <div class="btn-row">
+        <button class="chalk-btn primary" id="newPuzzleBtn">Give me a puzzle</button>
+      </div>
+      <div class="btn-row">
+        <button class="chalk-btn" id="hintBtn">Hint</button>
+        <button class="chalk-btn" id="solveBtn">Reveal solution</button>
+      </div>
+      <div class="btn-row">
+        <button class="chalk-btn" id="customToggle">Custom equation</button>
+      </div>
+      <div id="customPanel" hidden>
+        <div class="eq-row">
+          <label for="customEqInput">Add a piece with your own rule (dx, dy)</label>
+          <input type="text" id="customEqInput" placeholder="e.g. dx^2 - dy = 3">
+          <div class="eq-err" id="customEqErr"></div>
+        </div>
+        <div class="btn-row">
+          <button class="chalk-btn" id="customAddBtn">Add piece to board</button>
+        </div>
+      </div>
+
+      <div class="legend-title">Pieces on the board</div>
+      <div class="legend-list" id="legendList"></div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+  const NS="http://www.w3.org/2000/svg";
+  const SIZE=20, CELL=32;
+
+  // ---------- shared math helpers ----------
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  function randInt(a,b){ return a+Math.floor(Math.random()*(b-a+1)); }
+
+  function isOnLocus(fFunc,dx,dy){
+    const f0=fFunc(dx,dy);
+    if(!isFinite(f0)) return false;
+    const fx1=fFunc(dx+1,dy), fxm1=fFunc(dx-1,dy);
+    const fy1=fFunc(dx,dy+1), fym1=fFunc(dx,dy-1);
+    if(!isFinite(fx1)||!isFinite(fxm1)||!isFinite(fy1)||!isFinite(fym1)) return Math.abs(f0)<=0.5;
+    const gx=(fx1-fxm1)/2, gy=(fy1-fym1)/2;
+    const grad=Math.sqrt(gx*gx+gy*gy)||1;
+    const threshold=Math.max(0.5, Math.min(grad*0.6,3));
+    return Math.abs(f0)<=threshold;
+  }
+
+  // A "variant" is one concrete instance of a piece kind with rolled weights.
+  function makeVariant(kind){
+    switch(kind){
+      case 'line': return {kind,label:'Line', eqStr:'dx · dy = 0', f:(dx,dy)=>dx*dy};
+      case 'diagonal': return {kind,label:'Diagonal', eqStr:'|dx| − |dy| = 0', f:(dx,dy)=>Math.abs(dx)-Math.abs(dy)};
+      case 'ring': { const r=pick([3,4,5,6,7]);
+        return {kind,label:'Ring', eqStr:`|dx| + |dy| = ${r}`, f:(dx,dy)=>Math.abs(dx)+Math.abs(dy)-r}; }
+      case 'orbiter': { const r=pick([3,4,5,6]);
+        return {kind,label:'Orbiter', eqStr:`dx² + dy² = ${r*r}`, f:(dx,dy)=>dx*dx+dy*dy-r*r}; }
+      case 'comet': { const c=pick([0.25,0.3,0.4,0.5]);
+        return {kind,label:'Comet', eqStr:`dy = ${c}·dx² (fwd)`, f:(dx,dy)=>dy-c*dx*dx}; }
+      case 'warp': { const k=pick([3,4,6,8,9,-3,-4,-6]);
+        return {kind,label:'Warp', eqStr:`dx · dy = ${k}`, f:(dx,dy)=>dx*dy-k}; }
+      case 'wave': { const a=pick([1,1.5,2]), b=pick([0.4,0.5,0.6]);
+        return {kind,label:'Wave', eqStr:`dy = ${a}·sin(${b}·dx) (fwd)`, f:(dx,dy)=>dy-a*Math.sin(b*dx)}; }
+      case 'drift': { const c=pick([0.15,0.2,0.25,0.3]);
+        return {kind,label:'Drift', eqStr:`dy = ${c}·dx³ (fwd)`, f:(dx,dy)=>dy-c*dx*dx*dx}; }
+      case 'phase': { const m=pick([3,4,5]);
+        return {kind,label:'Phase', eqStr:`(dx+dy) mod ${m} = 0`, special:'modular', m}; }
+    }
+  }
+
+  // dx,dy are target-minus-piece in board coords. All attackers are gold,
+  // whose forward direction flips dy (mirrors the original engine's convention).
+  function hitsTarget(v, dx, dy){
+    if(dx===0&&dy===0) return false;
+    const dyE=-dy;
+    if(v.special==='modular'){ const m=v.m; return (((dx+dyE)%m)+m)%m===0; }
+    return isOnLocus(v.f, dx, dyE);
+  }
+
+  function iconPath(type){
+    switch(type){
+      case 'line': return '<line x1="-8" y1="0" x2="8" y2="0"/><line x1="0" y1="-8" x2="0" y2="8"/>';
+      case 'diagonal': return '<line x1="-6" y1="-6" x2="6" y2="6"/><line x1="-6" y1="6" x2="6" y2="-6"/>';
+      case 'comet': return '<path d="M -7 5 Q 0 -8 7 -3" fill="none"/><circle cx="7" cy="-3" r="2" stroke="none" fill="currentColor"/>';
+      case 'orbiter': return '<circle r="6" fill="none"/><circle cx="6" cy="0" r="1.6" stroke="none" fill="currentColor"/>';
+      case 'ring': return '<path d="M 0 -8 L 8 0 L 0 8 L -8 0 Z" fill="none"/>';
+      case 'halo': return '<circle r="3" stroke="none" fill="currentColor"/><circle r="7.5" fill="none" stroke-dasharray="2 2"/>';
+      case 'warp': return '<path d="M -3 -7 Q -8 0 -3 7" fill="none"/><path d="M 3 -7 Q 8 0 3 7" fill="none"/>';
+      case 'wave': return '<path d="M -8 0 Q -4 -7 0 0 Q 4 7 8 0" fill="none"/>';
+      case 'drift': return '<path d="M -7 -6 Q 0 -8 0 0 Q 0 8 7 6" fill="none"/>';
+      case 'phase': return '<circle cx="-5" cy="5" r="1.6" stroke="none" fill="currentColor"/><circle cx="0" cy="0" r="1.6" stroke="none" fill="currentColor"/><circle cx="5" cy="-5" r="1.6" stroke="none" fill="currentColor"/>';
+      case 'pebble': return '<circle r="4" stroke="none" fill="currentColor"/>';
+      case 'custom': return '<path d="M0 -8 L0 8 M-7 -4 L7 4 M-7 4 L7 -4"/>';
+    }
+    return '';
+  }
+
+  // ---------- difficulty config ----------
+  const MOVE_TIME_MS = 60000; // one minute per move, every difficulty
+
+  const DIFFS = {
+    easy: {
+      pool:['line','diagonal','ring'],
+      decoyPool:['line','diagonal','ring'],
+      maxRange:7, numDecoys:4, margin:4,
+      shields:()=>Math.random()<0.5?1:0,
+      sharedKindDecoy:false,
+      moveLimit:8,
+      desc:'One attacker among four decoys, straight lines and diamonds. 8 moves, 1 minute each — plenty of room to test pieces.'
+    },
+    medium: {
+      pool:['comet','orbiter','warp','wave','drift','phase','ring'],
+      decoyPool:['comet','orbiter','warp','wave','drift','phase','ring','line','diagonal'],
+      maxRange:10, numDecoys:6, margin:3,
+      shields:()=>1+Math.floor(Math.random()*2),
+      sharedKindDecoy:true,
+      moveLimit:6,
+      desc:'A crowded board of curves, warps, and modular traps — often a decoy of the same shape but a different number. 6 moves, 1 minute each.'
+    },
+    hard: {
+      pool:['comet','orbiter','warp','wave','drift','phase'],
+      decoyPool:['comet','orbiter','warp','wave','drift','phase'],
+      maxRange:13, numDecoys:9, margin:2,
+      shields:()=>2+Math.floor(Math.random()*2),
+      sharedKindDecoy:true,
+      extraSharedKindCount:4, extraSharedKindChance:0.55,
+      moveLimit:4,
+      desc:'Nothing but curves, warps, and modular traps — decoys included, so shape alone never gives it away. Several decoys often share the solver\u2019s own shape with a different number. Nine decoys, tight margins, extra Shields. 4 moves, 1 minute each.'
+    }
+  };
+
+  // ---------- puzzle generation ----------
+  function findSolutionPlacement(kind, core, maxRange, occupied){
+    for(let t=0;t<30;t++){
+      const v=makeVariant(kind);
+      const candidates=[];
+      for(let dx=-maxRange;dx<=maxRange;dx++){
+        for(let dy=-maxRange;dy<=maxRange;dy++){
+          if(dx===0&&dy===0) continue;
+          if(!hitsTarget(v,dx,dy)) continue;
+          const px=core.x-dx, py=core.y-dy;
+          if(px<0||px>=SIZE||py<0||py>=SIZE) continue;
+          if(occupied.has(px+','+py)) continue;
+          candidates.push({x:px,y:py});
+        }
+      }
+      if(candidates.length) return {pos:pick(candidates), v};
+    }
+    return null;
+  }
+
+  function findFalseDecoyPlacement(forcedKind, pool, core, maxRange, occupied){
+    for(let t=0;t<40;t++){
+      const px=core.x+randInt(-maxRange,maxRange), py=core.y+randInt(-maxRange,maxRange);
+      if(px<0||px>=SIZE||py<0||py>=SIZE) continue;
+      if(occupied.has(px+','+py)) continue;
+      const dx=core.x-px, dy=core.y-py;
+      if(dx===0&&dy===0) continue;
+      for(let w=0;w<8;w++){
+        const kind = forcedKind || pick(pool);
+        const v=makeVariant(kind);
+        if(!hitsTarget(v,dx,dy)) return {pos:{x:px,y:py}, v};
+      }
+    }
+    return null;
+  }
+
+  function randomNear(core,maxR,occupied){
+    for(let t=0;t<20;t++){
+      const dx=randInt(-maxR,maxR), dy=randInt(-maxR,maxR);
+      if(dx===0&&dy===0) continue;
+      const x=core.x+dx, y=core.y+dy;
+      if(x<0||x>=SIZE||y<0||y>=SIZE) continue;
+      if(occupied.has(x+','+y)) continue;
+      return {x,y};
+    }
+    return null;
+  }
+
+  function generatePuzzle(diff){
+    const cfg=DIFFS[diff];
+    for(let attempt=0; attempt<40; attempt++){
+      const core={x:randInt(cfg.margin,SIZE-1-cfg.margin), y:randInt(cfg.margin,SIZE-1-cfg.margin)};
+      const occupied=new Set([core.x+','+core.y]);
+      const shields=[];
+      const nShields=cfg.shields();
+      for(let i=0;i<nShields;i++){
+        const pos=randomNear(core,2,occupied);
+        if(pos){ shields.push(pos); occupied.add(pos.x+','+pos.y); }
+      }
+      const solKind=pick(cfg.pool);
+      const sol=findSolutionPlacement(solKind, core, cfg.maxRange, occupied);
+      if(!sol) continue;
+      occupied.add(sol.pos.x+','+sol.pos.y);
+      const gold=[{x:sol.pos.x,y:sol.pos.y,type:solKind,v:sol.v,isSolution:true}];
+
+      let ok=true;
+      for(let i=0;i<cfg.numDecoys;i++){
+        let forced = (cfg.sharedKindDecoy && i===0 && Math.random()<0.6) ? solKind : null;
+        if(!forced && cfg.extraSharedKindChance && i<(cfg.extraSharedKindCount||0) && Math.random()<cfg.extraSharedKindChance){
+          forced = solKind;
+        }
+        const d=findFalseDecoyPlacement(forced, cfg.decoyPool, core, cfg.maxRange, occupied);
+        if(!d){ ok=false; break; }
+        occupied.add(d.pos.x+','+d.pos.y);
+        gold.push({x:d.pos.x,y:d.pos.y,type:d.v.kind,v:d.v,isSolution:false});
+      }
+      if(!ok) continue;
+
+      const hits=gold.filter(p=>hitsTarget(p.v, core.x-p.x, core.y-p.y));
+      if(hits.length!==1) continue;
+      return {core, shields, gold};
+    }
+    return null;
+  }
+
+  function fallbackPuzzle(){
+    const core={x:10,y:10};
+    return {
+      core,
+      shields:[],
+      gold:[
+        {x:10,y:4,type:'line',v:makeVariant('line'),isSolution:true},
+        {x:7,y:8,type:'diagonal',v:makeVariant('diagonal'),isSolution:false},
+        {x:13,y:6,type:'diagonal',v:makeVariant('diagonal'),isSolution:false}
+      ]
+    };
+  }
+
+  // ---------- custom equation compiler ----------
+  function compileEquation(str){
+    const raw=(str||'').trim();
+    if(!raw) throw new Error('Equation is empty');
+    let eqStr=raw.replace(/[·×]/g,'*').replace(/[−–]/g,'-');
+    const parts=eqStr.split('=');
+    if(parts.length>2) throw new Error('Only one "=" allowed');
+    const lhs=parts[0], rhs=parts.length===2?parts[1]:'0';
+    const expr=`(${lhs})-(${rhs})`;
+    if(!/^[0-9a-zA-Z+\-*/^().,\s]+$/.test(expr)) throw new Error('Unsupported character');
+    const idWhitelist=new Set(['dx','dy','abs','sin','cos','tan','sqrt','pow','floor','ceil','round','min','max','log','exp','atan2','sign','mod','PI','E']);
+    const ids=expr.match(/[a-zA-Z_][a-zA-Z0-9_]*/g)||[];
+    for(const id of ids){ if(!idWhitelist.has(id)) throw new Error('Unknown term "'+id+'"'); }
+    let js=expr.replace(/\^/g,'**');
+    ['abs','sin','cos','tan','sqrt','pow','floor','ceil','round','log','exp','atan2','sign'].forEach(fn=>{
+      js=js.replace(new RegExp('\\b'+fn+'\\s*\\(','g'), 'Math.'+fn+'(');
+    });
+    js=js.replace(/\bmod\s*\(/g,'__mod(').replace(/\bPI\b/g,'Math.PI').replace(/\bE\b/g,'Math.E');
+    let fn;
+    try{
+      fn=new Function('dx','dy','__mod', `"use strict"; return (${js});`);
+      const test=fn(1,2,(a,b)=>((a%b)+b)%b);
+      if(typeof test!=='number') throw new Error('bad');
+    }catch(e){ throw new Error('Could not parse that equation'); }
+    return {fn:(dx,dy)=>fn(dx,dy,(a,b)=>((a%b)+b)%b), src:raw};
+  }
+
+  // ---------- state ----------
+  let difficulty='easy', puzzle=null, selected=null, legalMovesCache=[];
+  let puzzleSolved=false, revealing=false, hintActive=false, attemptsThisPuzzle=0;
+  let solvedCount=0, streak=0;
+  let puzzleActive=false, failed=false, movesLeft=0, moveDeadline=0, timerHandle=null;
+  let customCount=0;
+  const MAX_CUSTOM=3;
+
+  function getPieceAt(x,y){
+    if(puzzle.core && puzzle.core.x===x && puzzle.core.y===y) return {...puzzle.core, side:'blue', type:'halo', isCore:true};
+    const s=puzzle.shields.find(p=>p.x===x&&p.y===y);
+    if(s) return {...s, side:'blue', type:'pebble'};
+    const g=puzzle.gold.find(p=>p.x===x&&p.y===y);
+    if(g) return {...g, side:'gold'};
+    return null;
+  }
+
+  function computeLegalMoves(piece){
+    const moves=[];
+    for(let x=0;x<SIZE;x++){
+      for(let y=0;y<SIZE;y++){
+        const dx=x-piece.x, dy=y-piece.y;
+        if(!hitsTarget(piece.v,dx,dy)) continue;
+        const occ=getPieceAt(x,y);
+        if(occ && occ.side==='gold') continue;
+        moves.push({x,y,capture:!!occ});
+      }
+    }
+    return moves;
+  }
+
+  function newPuzzle(){
+    let p=null;
+    for(let i=0;i<6 && !p;i++) p=generatePuzzle(difficulty);
+    puzzle = p || fallbackPuzzle();
+    selected=null; legalMovesCache=[]; puzzleSolved=false; revealing=false; hintActive=false; attemptsThisPuzzle=0;
+    puzzleActive=true; failed=false; movesLeft=DIFFS[difficulty].moveLimit;
+    customCount=0;
+    const customErr=document.getElementById('customEqErr'); if(customErr) customErr.textContent='';
+    setStatus('Find the move that captures the Core.','');
+    buildLegend();
+    updateCounters();
+    startMoveTimer();
+    render();
+  }
+
+  function setStatus(msg,cls){
+    const box=document.getElementById('statusBox');
+    box.classList.remove('win','err');
+    if(cls) box.classList.add(cls);
+    box.textContent=msg;
+  }
+
+  function updateCounters(){
+    document.getElementById('solvedCount').textContent=solvedCount;
+    document.getElementById('streakCount').textContent=streak;
+    document.getElementById('movesLeft').textContent=movesLeft;
+  }
+
+  function stopMoveTimer(){
+    if(timerHandle){ clearInterval(timerHandle); timerHandle=null; }
+  }
+
+  function startMoveTimer(){
+    stopMoveTimer();
+    moveDeadline=Date.now()+MOVE_TIME_MS;
+    document.getElementById('timeLeft').textContent=Math.ceil(MOVE_TIME_MS/1000)+'s';
+    timerHandle=setInterval(tickTimer,250);
+  }
+
+  function tickTimer(){
+    if(!puzzleActive) { stopMoveTimer(); return; }
+    const remaining=moveDeadline-Date.now();
+    if(remaining<=0){
+      document.getElementById('timeLeft').textContent='0s';
+      handleTimeout();
+    } else {
+      document.getElementById('timeLeft').textContent=Math.ceil(remaining/1000)+'s';
+    }
+  }
+
+  function handleTimeout(){
+    selected=null; legalMovesCache=[]; streak=0;
+    movesLeft--;
+    moveCoreAndShields();
+    recomputeSolution();
+    updateCounters();
+    if(movesLeft<=0){
+      handleFailure("Time's up, and you're out of moves.");
+    } else {
+      setStatus("Time's up for that move — it's forfeited, and the Core slips away. Moves left: "+movesLeft+".",'err');
+      startMoveTimer();
+      render();
+    }
+  }
+
+  function handleFailure(prefix){
+    puzzleActive=false; failed=true;
+    stopMoveTimer();
+    const sol=puzzle.gold.find(p=>p.isSolution);
+    const answerText = sol ? ` The ${sol.v.label} (${sol.v.eqStr}) was the answer.` : ' Nothing on the board reached it by the end.';
+    setStatus(`${prefix}${answerText}`,'err');
+    document.getElementById('timeLeft').textContent='—';
+    render();
+  }
+
+  function chebyshev(ax,ay,bx,by){ return Math.max(Math.abs(ax-bx), Math.abs(ay-by)); }
+
+  function moveCoreAndShields(){
+    if(!puzzle.core) return;
+    // Core moves like a king (one step, any of 8 directions) into an empty
+    // square, choosing the step that puts the most distance between itself
+    // and the nearest gold piece — it's actively fleeing.
+    const candidates=[];
+    for(let dx=-1;dx<=1;dx++){
+      for(let dy=-1;dy<=1;dy++){
+        if(dx===0&&dy===0) continue;
+        const nx=puzzle.core.x+dx, ny=puzzle.core.y+dy;
+        if(nx<0||nx>=SIZE||ny<0||ny>=SIZE) continue;
+        if(getPieceAt(nx,ny)) continue;
+        candidates.push({x:nx,y:ny});
+      }
+    }
+    if(candidates.length){
+      let best=null, bestScore=-Infinity;
+      candidates.forEach(c=>{
+        let minDist=Infinity;
+        puzzle.gold.forEach(g=>{ minDist=Math.min(minDist, chebyshev(g.x,g.y,c.x,c.y)); });
+        if(minDist>bestScore || (minDist===bestScore && Math.random()<0.5)){ bestScore=minDist; best=c; }
+      });
+      if(best){ puzzle.core.x=best.x; puzzle.core.y=best.y; }
+    }
+
+    // Shields shuffle one step to a random empty adjacent square, when one's available.
+    puzzle.shields.forEach(s=>{
+      const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+      for(let i=dirs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [dirs[i],dirs[j]]=[dirs[j],dirs[i]]; }
+      for(const [dx,dy] of dirs){
+        const nx=s.x+dx, ny=s.y+dy;
+        if(nx<0||nx>=SIZE||ny<0||ny>=SIZE) continue;
+        if(getPieceAt(nx,ny)) continue;
+        s.x=nx; s.y=ny;
+        break;
+      }
+    });
+  }
+
+  function recomputeSolution(){
+    if(!puzzle.core){ puzzle.gold.forEach(p=>p.isSolution=false); return; }
+    puzzle.gold.forEach(p=>{
+      p.isSolution = hitsTarget(p.v, puzzle.core.x-p.x, puzzle.core.y-p.y);
+    });
+  }
+
+  function onCellClick(x,y){
+    if(!puzzleActive || revealing) return;
+    const occ=getPieceAt(x,y);
+    if(!selected){
+      if(occ && occ.side==='gold'){ selected=puzzle.gold.find(p=>p.x===x&&p.y===y); legalMovesCache=computeLegalMoves(selected); }
+      render();
+      return;
+    }
+    if(occ && occ.side==='gold' && !(occ.x===selected.x&&occ.y===selected.y)){
+      selected=puzzle.gold.find(p=>p.x===x&&p.y===y); legalMovesCache=computeLegalMoves(selected); render(); return;
+    }
+    if(selected.x===x && selected.y===y){ selected=null; legalMovesCache=[]; render(); return; }
+
+    // The move is executed on whatever square the player picks — it doesn't
+    // have to match the piece's equation. Landing on the Core still wins;
+    // landing anywhere else still costs a move, legal or not.
+    const capturingCore = !!(occ && occ.isCore);
+    const capturingShield = !!(occ && occ.side==='blue' && !occ.isCore);
+    if(capturingShield){
+      const idx=puzzle.shields.findIndex(s=>s.x===x&&s.y===y);
+      if(idx>=0) puzzle.shields.splice(idx,1);
+    }
+
+    const mover=selected;
+    mover.x=x; mover.y=y;
+
+    if(capturingCore){
+      const label = `${mover.v.label} (${mover.v.eqStr})`;
+      puzzle.core=null;
+      puzzleSolved=true; puzzleActive=false; solvedCount++;
+      streak = attemptsThisPuzzle===0 ? streak+1 : 0;
+      selected=null; legalMovesCache=[];
+      stopMoveTimer();
+      document.getElementById('timeLeft').textContent='—';
+      setStatus(`Captured! The ${label} does it.`,'win');
+      updateCounters();
+      render();
+    } else {
+      attemptsThisPuzzle++; streak=0;
+      movesLeft--;
+      selected=null; legalMovesCache=[];
+      moveCoreAndShields();
+      recomputeSolution();
+      updateCounters();
+      if(movesLeft<=0){
+        handleFailure('Not the winning move, and out of moves.');
+      } else {
+        setStatus('Not the winning move — the Core slips away. Moves left: '+movesLeft+'.','err');
+        startMoveTimer();
+        render();
+      }
+    }
+  }
+
+  function render(){
+    const svg=document.getElementById('board');
+    for(const rect of cellRects){
+      const x=Number(rect.dataset.x), y=Number(rect.dataset.y);
+      let fill=(x+y)%2===0 ? 'var(--square-alt)' : 'transparent';
+      const isSel = selected && selected.x===x && selected.y===y;
+      const mv = legalMovesCache.find(m=>m.x===x&&m.y===y);
+      rect.classList.toggle('movable', !!mv);
+      if(mv) fill = mv.capture ? 'var(--capture-highlight)' : 'var(--move-highlight)';
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', isSel ? 'var(--ink)' : 'var(--grid-line)');
+      rect.setAttribute('stroke-width', isSel ? '2.5' : '1');
+    }
+
+    piecesLayer.innerHTML='';
+    const all=[];
+    if(puzzle.core) all.push({...puzzle.core, side:'blue', type:'halo', isCore:true});
+    puzzle.shields.forEach(s=>all.push({...s, side:'blue', type:'pebble'}));
+    puzzle.gold.forEach(g=>all.push({...g, side:'gold'}));
+
+    all.forEach(p=>{
+      const cx=p.x*CELL+CELL/2, cy=p.y*CELL+CELL/2;
+      const g=document.createElementNS(NS,'g');
+      g.setAttribute('transform',`translate(${cx},${cy})`);
+      g.setAttribute('color', p.side==='gold' ? 'var(--gold)' : 'var(--blue)');
+      g.classList.add('piece');
+      if(hintActive && p.isSolution) g.classList.add('hint');
+      const bg=document.createElementNS(NS,'circle');
+      bg.classList.add('bg');
+      bg.setAttribute('r', p.isCore ? '13' : '11.5');
+      bg.setAttribute('fill','var(--board-bg)');
+      bg.setAttribute('stroke','currentColor');
+      bg.setAttribute('stroke-width', p.isCore ? '2.4' : '2');
+      g.appendChild(bg);
+      const iconWrap=document.createElementNS(NS,'g');
+      iconWrap.setAttribute('stroke','currentColor');
+      iconWrap.setAttribute('stroke-width','1.8');
+      iconWrap.setAttribute('stroke-linecap','round');
+      iconWrap.setAttribute('transform','scale(0.82)');
+      iconWrap.innerHTML=iconPath(p.type);
+      g.appendChild(iconWrap);
+      g.addEventListener('click',(e)=>{ e.stopPropagation(); onCellClick(p.x,p.y); });
+      piecesLayer.appendChild(g);
+    });
+  }
+
+  function buildLegend(){
+    const list=document.getElementById('legendList');
+    list.innerHTML='';
+    const seen=new Set();
+    function addRow(type,name,eq){
+      const key=type+'|'+eq;
+      if(seen.has(key)) return; seen.add(key);
+      const row=document.createElement('div'); row.className='legend-row';
+      const icSvg=document.createElementNS(NS,'svg');
+      icSvg.setAttribute('viewBox','-13 -13 26 26'); icSvg.classList.add('ic'); icSvg.setAttribute('color','var(--ink)');
+      const iw=document.createElementNS(NS,'g');
+      iw.setAttribute('stroke','currentColor'); iw.setAttribute('stroke-width','2'); iw.setAttribute('stroke-linecap','round');
+      iw.innerHTML=iconPath(type);
+      icSvg.appendChild(iw);
+      const textWrap=document.createElement('div'); textWrap.className='ltext';
+      const nameSpan=document.createElement('span'); nameSpan.className='lname'; nameSpan.textContent=name;
+      const eqSpan=document.createElement('span'); eqSpan.className='leq'; eqSpan.textContent=eq;
+      textWrap.appendChild(nameSpan); textWrap.appendChild(eqSpan);
+      row.appendChild(icSvg); row.appendChild(textWrap);
+      list.appendChild(row);
+    }
+    addRow('halo','Core','max(|dx|,|dy|) = 1 — moves like a king, and flees one step away from your pieces every time you miss. Capture it to win.');
+    if(puzzle.shields.length) addRow('pebble','Shield','shuffles one step each turn — blocks nothing, just occupies a square.');
+    puzzle.gold.forEach(p=> addRow(p.type, p.v.label, p.v.eqStr));
+  }
+
+  // ---------- board build (once) ----------
+  const svg=document.getElementById('board');
+  const cellsLayer=document.createElementNS(NS,'g');
+  const piecesLayer=document.createElementNS(NS,'g');
+  svg.appendChild(cellsLayer); svg.appendChild(piecesLayer);
+  const cellRects=[];
+  for(let y=0;y<SIZE;y++){
+    for(let x=0;x<SIZE;x++){
+      const rect=document.createElementNS(NS,'rect');
+      rect.setAttribute('x',x*CELL); rect.setAttribute('y',y*CELL);
+      rect.setAttribute('width',CELL); rect.setAttribute('height',CELL);
+      rect.setAttribute('stroke','var(--grid-line)'); rect.setAttribute('stroke-width','1');
+      rect.classList.add('cell'); rect.dataset.x=x; rect.dataset.y=y;
+      rect.addEventListener('click',()=>onCellClick(x,y));
+      cellsLayer.appendChild(rect); cellRects.push(rect);
+    }
+  }
+  const ranksCol=document.getElementById('ranksCol');
+  const filesRow=document.getElementById('filesRow');
+  for(let y=0;y<SIZE;y++){ const s=document.createElement('span'); s.textContent=SIZE-y; ranksCol.appendChild(s); }
+  for(let x=0;x<SIZE;x++){ const s=document.createElement('span'); s.textContent=String.fromCharCode(97+x); filesRow.appendChild(s); }
+
+  // ---------- controls ----------
+  function setDifficulty(diff){
+    difficulty=diff;
+    document.getElementById('diffEasy').classList.toggle('active', diff==='easy');
+    document.getElementById('diffMedium').classList.toggle('active', diff==='medium');
+    document.getElementById('diffHard').classList.toggle('active', diff==='hard');
+    document.getElementById('diffDesc').textContent = DIFFS[diff].desc;
+    streak=0; updateCounters();
+    newPuzzle();
+  }
+  document.getElementById('diffEasy').addEventListener('click', ()=>setDifficulty('easy'));
+  document.getElementById('diffMedium').addEventListener('click', ()=>setDifficulty('medium'));
+  document.getElementById('diffHard').addEventListener('click', ()=>setDifficulty('hard'));
+  document.getElementById('newPuzzleBtn').addEventListener('click', newPuzzle);
+
+  document.getElementById('hintBtn').addEventListener('click', ()=>{
+    if(!puzzleActive||revealing) return;
+    hintActive=!hintActive;
+    if(hintActive){
+      const hasSolution = puzzle.gold.some(p=>p.isSolution);
+      setStatus(hasSolution ? 'Hint: the pulsing piece is the one that solves it.' : 'Nothing reaches it right now — the Core has moved. Take a move and it may move again.', hasSolution ? '' : 'err');
+    } else {
+      setStatus('Find the move that captures the Core.', '');
+    }
+    render();
+  });
+
+  document.getElementById('solveBtn').addEventListener('click', ()=>{
+    if(!puzzleActive||revealing) return;
+    const sol=puzzle.gold.find(p=>p.isSolution);
+    if(!sol){
+      setStatus('Nothing on the board reaches the Core right now — make a move and see where it flees to.', 'err');
+      return;
+    }
+    revealing=true; hintActive=false;
+    stopMoveTimer();
+    document.getElementById('timeLeft').textContent='—';
+    selected=sol; legalMovesCache=computeLegalMoves(sol);
+    setStatus(`Watch: the ${sol.v.label} (${sol.v.eqStr}) captures the Core.`,'');
+    render();
+    setTimeout(()=>{
+      sol.x=puzzle.core.x; sol.y=puzzle.core.y;
+      puzzle.core=null;
+      selected=null; legalMovesCache=[]; puzzleActive=false; revealing=false;
+      setStatus('Solution revealed. Try a new puzzle when ready.','');
+      render();
+    }, 900);
+  });
+
+  function placeCustomPiece(compiled){
+    const occupied=new Set();
+    if(puzzle.core) occupied.add(puzzle.core.x+','+puzzle.core.y);
+    puzzle.shields.forEach(s=>occupied.add(s.x+','+s.y));
+    puzzle.gold.forEach(g=>occupied.add(g.x+','+g.y));
+    let pos=null;
+    for(let t=0;t<200;t++){
+      const x=randInt(0,SIZE-1), y=randInt(0,SIZE-1);
+      if(!occupied.has(x+','+y)){ pos={x,y}; break; }
+    }
+    if(!pos) return false;
+    puzzle.gold.push({
+      x:pos.x, y:pos.y, type:'custom',
+      v:{kind:'custom', label:'Custom', eqStr:compiled.src, f:compiled.fn},
+      isSolution:false
+    });
+    return true;
+  }
+
+  const customToggle=document.getElementById('customToggle');
+  const customPanel=document.getElementById('customPanel');
+  customToggle.addEventListener('click', ()=>{
+    const hidden=customPanel.hasAttribute('hidden');
+    if(hidden){ customPanel.removeAttribute('hidden'); customToggle.classList.add('active'); }
+    else{ customPanel.setAttribute('hidden',''); customToggle.classList.remove('active'); }
+  });
+
+  document.getElementById('customAddBtn').addEventListener('click', ()=>{
+    const input=document.getElementById('customEqInput');
+    const errEl=document.getElementById('customEqErr');
+    errEl.textContent=''; input.classList.remove('bad');
+    if(!puzzleActive){ errEl.textContent='Start or continue an active puzzle first.'; return; }
+    if(customCount>=MAX_CUSTOM){ errEl.textContent='This board already has '+MAX_CUSTOM+' custom pieces.'; return; }
+    try{
+      const compiled=compileEquation(input.value);
+      const placed=placeCustomPiece(compiled);
+      if(!placed){ errEl.textContent='No empty square left to place it.'; return; }
+      customCount++;
+      buildLegend();
+      render();
+    }catch(e){
+      errEl.textContent=e.message;
+      input.classList.add('bad');
+    }
+  });
+
+  document.getElementById('diffDesc').textContent = DIFFS.easy.desc;
+  newPuzzle();
+})();
+</script>
+</body>
+</html>
