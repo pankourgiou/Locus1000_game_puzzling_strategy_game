@@ -1,0 +1,3 @@
+The game is called Locus 1000 so Download the .html and double click it and you have the full Locus 1000 game working. In the game you have 1 minute per move the pieces are always on a puzzling state..mixed board not like in a normal chess game and the moves derive by equations that give you coordinates...so you have to capture the Core(king) in a certain amount of moves.
+It's not so difficult the idea is the when we start playing chess we set the pieces on the right order...No that's just a starting point but really learning chess should include puzzling chess-pieces setting on the chessboard...
+the one player should coach the other sometimes like telling him some short of new ideas or a consult...so that's it! enjoy the game!
